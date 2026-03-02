@@ -1,0 +1,24 @@
+{
+  "name": "mi-ahorro",
+  "version": "1.0.0",
+  "description": "App de control de finanzas del hogar",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "npx nodemon server.js"
+  },
+  "keywords": [
+    "finanzas",
+    "ahorro",
+    "hogar",
+    "presupuesto"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-session": "^1.19.0",
+    "helmet": "^8.1.0",
+    "sqlite3": "^5.1.7"
+  }
+}

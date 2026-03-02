@@ -1,0 +1,23 @@
+services:
+  mi-ahorro:
+    build: .
+    container_name: mi-ahorro
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "3443:3443"
+    volumes:
+      - mi-ahorro-data:/app/data
+      - mi-ahorro-certs:/app/certs
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/data/finanzas.db
+      - CERT_PATH=/app/certs
+
+volumes:
+  mi-ahorro-data:
+    driver: local
+  mi-ahorro-certs:
+    driver: local
