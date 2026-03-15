@@ -10,7 +10,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: "postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD}@postgres:5432/miahorro"
+      DATABASE_URL: "postgresql://miahorro:${DB_PASSWORD}@postgres:5432/miahorro"
       APP_PASSWORD: "${APP_PASSWORD}"
       SESSION_SECRET: "${SESSION_SECRET}"
       NODE_ENV: production
