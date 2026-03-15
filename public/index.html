@@ -67,6 +67,12 @@
         .cal-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
         .cal-dot.income { background: var(--accent-green); }
         .cal-dot.expense { background: var(--accent-red); }
+        .cal-dot.investment { background: var(--accent-blue); }
+        .cal-dot.hucha { background: var(--accent-yellow); }
+        .transaction-icon.investment { background: var(--accent-blue-soft); }
+        .transaction-amount.investment { color: var(--accent-blue); }
+        .transaction-icon.hucha { background: rgba(251, 191, 36, 0.15); }
+        .transaction-amount.hucha { color: var(--accent-yellow); }
         .day-modal-date { text-align: center; font-size: 1rem; font-weight: 700; margin-bottom: 16px; color: var(--text-secondary); }
         .day-modal-totals { display: flex; gap: 10px; margin-bottom: 16px; }
         .day-modal-total { flex: 1; background: var(--bg-card); border-radius: 12px; padding: 10px 12px; text-align: center; }
@@ -161,9 +167,10 @@
         .year-toggle { background: var(--bg-card); border: none; color: var(--accent-blue); padding: 8px 14px; border-radius: 8px; font-family: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
         .year-summary { background: var(--bg-card); border-radius: 16px; padding: 16px; margin-bottom: 20px; display: none; }
         .year-summary.active { display: block; }
-        .year-summary h3 { font-size: 1rem; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+        .year-summary h3 { font-size: 1rem; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 10; }
         .proj-toggle-btn { font-size: 0.75rem; font-weight: 700; padding: 5px 10px; border-radius: 8px; border: 2px solid var(--accent-orange); background: transparent; color: var(--accent-orange); font-family: inherit; cursor: pointer; }
         .proj-toggle-btn.active { background: var(--accent-orange-soft); }
+        .year-select { background: var(--bg-main); border: 1.5px solid var(--border); border-radius: 8px; color: var(--text-primary); font-family: inherit; font-size: 0.95rem; font-weight: 700; padding: 2px 6px; cursor: pointer; position: relative; z-index: 10; }
         .bar.projected { opacity: 0.35; border-top: 2px dashed; }
         .bar.income.projected { border-color: var(--accent-green); }
         .bar.expense.projected { border-color: var(--accent-red); }
@@ -175,8 +182,8 @@
         .bar.income { background: var(--accent-green); }
         .bar.expense { background: var(--accent-red); }
         .month-label { font-size: 0.6rem; color: var(--text-secondary); margin-top: 6px; font-weight: 600; }
-        .year-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; padding-top: 12px; border-top: 1px solid var(--border-color); }
-        .year-total-item .value { font-size: 1.1rem; font-weight: 800; }
+        .year-totals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; padding-top: 12px; border-top: 1px solid var(--border-color); }
+        .year-total-item .value { font-size: 0.88rem; font-weight: 800; }
         .year-total-item .label { font-size: 0.7rem; color: var(--text-secondary); }
         .month-select-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
         .month-select-btn { background: var(--bg-card); border: 2px solid var(--border-color); border-radius: 12px; padding: 14px 8px; cursor: pointer; text-align: center; color: var(--text-primary); font-family: inherit; font-weight: 600; }
@@ -239,12 +246,13 @@
                 <div id="invList"></div>
             </div>
             <div class="year-summary" id="yearSummary">
-                <h3><span>📊 Resumen <span id="summaryYear">2025</span></span><button class="proj-toggle-btn" id="projToggleBtn" onclick="toggleProjection()">📈 Proyectar</button></h3>
+                <h3><span>📊 Resumen <select id="yearSelector" class="year-select" onchange="changeProjectionYear(this.value)"></select></span><button class="proj-toggle-btn" id="projToggleBtn" onclick="toggleProjection()">📈 Proyectar</button></h3>
                 <div class="proj-badge hidden" id="projBadge">✦ Meses futuros estimados por la media</div>
                 <div class="year-chart" id="yearChart"></div>
                 <div class="year-totals">
                     <div class="year-total-item"><div class="value" id="yearIncome" style="color: var(--accent-green)">0 €</div><div class="label" id="yearIncomeLabel">Ingresos</div></div>
                     <div class="year-total-item"><div class="value" id="yearExpense" style="color: var(--accent-red)">0 €</div><div class="label" id="yearExpenseLabel">Gastos</div></div>
+                    <div class="year-total-item"><div class="value" id="yearAhorro" style="color: var(--accent-green)">0 €</div><div class="label" id="yearAhorroLabel">Ahorro</div></div>
                     <div class="year-total-item"><div class="value" id="yearSavings" style="color: var(--accent-yellow)">0 €</div><div class="label">Patrimonio</div></div>
                 </div>
             </div>
@@ -320,6 +328,7 @@
                 { id: 'salary', emoji: '💼', name: 'Nómina' },
                 { id: 'bonus', emoji: '🎁', name: 'Extra' },
                 { id: 'investment', emoji: '📈', name: 'Inversión' },
+                { id: 'hucha', emoji: '🐷', name: 'Hucha' },
                 { id: 'other_in', emoji: '💰', name: 'Otros' }
             ],
             expense: [
@@ -452,7 +461,7 @@
         }
         
         // UI
-        function updateUI() { renderCalendar(); updateSummary(); renderTransactions(); updateYearSummary(); }
+        function updateUI() { renderCalendar(); updateSummary(); renderTransactions(); populateYearSelector(); updateYearSummary(); }
 
         function renderCalendar() {
             const y = currentDate.getFullYear(), m = currentDate.getMonth();
@@ -469,8 +478,10 @@
                 const d = new Date(t.date + 'T12:00:00');
                 if (d.getMonth() === m && d.getFullYear() === y) {
                     const day = d.getDate();
-                    if (!txByDay[day]) txByDay[day] = { income: false, expense: false };
-                    txByDay[day][t.type] = true;
+                    if (!txByDay[day]) txByDay[day] = { income: false, expense: false, investment: false, hucha: false };
+                    if (t.category === 'investment') txByDay[day].investment = true;
+                    else if (t.category === 'hucha') txByDay[day].hucha = true;
+                    else txByDay[day][t.type] = true;
                 }
             });
 
@@ -486,8 +497,10 @@
                 const tx = txByDay[d];
                 let dots = '';
                 if (tx) {
-                    if (tx.income)  dots += '<div class="cal-dot income"></div>';
-                    if (tx.expense) dots += '<div class="cal-dot expense"></div>';
+                    if (tx.income)     dots += '<div class="cal-dot income"></div>';
+                    if (tx.expense)    dots += '<div class="cal-dot expense"></div>';
+                    if (tx.investment) dots += '<div class="cal-dot investment"></div>';
+                    if (tx.hucha)      dots += '<div class="cal-dot hucha"></div>';
                 }
                 const cls = [isToday ? 'today' : '', tx ? 'has-tx' : ''].filter(Boolean).join(' ');
                 const clickAttr = tx ? `onclick="openDayModal(${d})"` : '';
@@ -508,7 +521,7 @@
             document.getElementById('dayModalTitle').textContent = `${weekDays[d.getDay()]} ${day}`;
             document.getElementById('dayModalDate').textContent = `${day} de ${monthNames[m]} de ${y}`;
 
-            const inc = dayTx.filter(t => t.type === 'income').reduce((s,t) => s + t.amount, 0);
+            const inc = dayTx.filter(t => t.type === 'income' && !INFO_ONLY_CATS.has(t.category)).reduce((s,t) => s + t.amount, 0);
             const exp = dayTx.filter(t => t.type === 'expense').reduce((s,t) => s + t.amount, 0);
             let totalsHtml = '';
             if (inc > 0) totalsHtml += `<div class="day-modal-total"><div class="dmt-label">Ingresos</div><div class="dmt-value" style="color:var(--accent-green)">${formatMoney(inc)}</div></div>`;
@@ -519,7 +532,14 @@
                 .sort((a,b) => a.type.localeCompare(b.type))
                 .map(t => {
                     const cat = [...categories.income, ...categories.expense].find(c => c.id === t.category);
-                    return `<div class="transaction-item"><div class="transaction-icon ${t.type}">${cat?.emoji || '📌'}</div><div class="transaction-info"><div class="transaction-desc">${escapeHtml(t.description)}</div><div class="transaction-category">${cat?.name || 'Otro'}</div></div><div class="transaction-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatMoney(t.amount)}</div></div>`;
+                    const isInv   = t.category === 'investment';
+                    const isHucha = t.category === 'hucha';
+                    const infoOnly = isInv || isHucha;
+                    const iconCls = isInv ? 'investment' : isHucha ? 'hucha' : t.type;
+                    const amtCls  = isInv ? 'investment' : isHucha ? 'hucha' : t.type;
+                    const amtStr  = infoOnly ? formatMoney(t.amount) : (t.type === 'income' ? '+' : '-') + formatMoney(t.amount);
+                    const infoBadge = isInv ? ' <span style="font-size:0.65rem;color:var(--accent-blue);font-weight:700">(inf.)</span>' : isHucha ? ' <span style="font-size:0.65rem;color:var(--accent-yellow);font-weight:700">(hucha)</span>' : '';
+                    return `<div class="transaction-item"><div class="transaction-icon ${iconCls}">${cat?.emoji || '📌'}</div><div class="transaction-info"><div class="transaction-desc">${escapeHtml(t.description)}</div><div class="transaction-category">${cat?.name || 'Otro'}${infoBadge}</div></div><div class="transaction-amount ${amtCls}">${amtStr}</div></div>`;
                 }).join('');
 
             document.getElementById('dayModalOverlay').classList.add('active');
@@ -530,9 +550,11 @@
         function changeMonth(d) { currentDate.setMonth(currentDate.getMonth() + d); updateUI(); }
         function getMonthTransactions() { const m = currentDate.getMonth(), y = currentDate.getFullYear(); return transactions.filter(t => { const d = new Date(t.date + 'T12:00:00'); return d.getMonth() === m && d.getFullYear() === y; }); }
         
+        const INFO_ONLY_CATS = new Set(['investment', 'hucha']);
+
         function updateSummary() {
             const tx = getMonthTransactions();
-            const inc = tx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+            const inc = tx.filter(t => t.type === 'income' && !INFO_ONLY_CATS.has(t.category)).reduce((s, t) => s + t.amount, 0);
             const exp = tx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
             const bal = inc - exp;
             const rate = inc > 0 ? Math.round((bal / inc) * 100) : 0;
@@ -554,13 +576,52 @@
             }
             container.innerHTML = tx.map(t => {
                 const cat = [...categories.income, ...categories.expense].find(c => c.id === t.category);
-                return `<div class="transaction-item"><div class="transaction-icon ${t.type}">${cat?.emoji || '📌'}</div><div class="transaction-info" onclick="editTransaction(${t.id})"><div class="transaction-desc">${escapeHtml(t.description)}</div><div class="transaction-category">${cat?.name || 'Otro'} · ${new Date(t.date + 'T12:00:00').getDate()} ${monthShort[currentDate.getMonth()]}</div></div><div class="transaction-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatMoney(t.amount)}</div><div class="transaction-actions"><button class="transaction-btn edit" onclick="editTransaction(${t.id})">✏️</button><button class="transaction-btn delete" onclick="deleteTransaction(${t.id})">🗑️</button></div></div>`;
+                const isInv   = t.category === 'investment';
+                const isHucha = t.category === 'hucha';
+                const infoOnly = isInv || isHucha;
+                const iconCls = isInv ? 'investment' : isHucha ? 'hucha' : t.type;
+                const amtCls  = isInv ? 'investment' : isHucha ? 'hucha' : t.type;
+                const amtStr  = infoOnly ? formatMoney(t.amount) : (t.type === 'income' ? '+' : '-') + formatMoney(t.amount);
+                const infoBadge = isInv ? ' <span style="font-size:0.65rem;color:var(--accent-blue);font-weight:700">(inf.)</span>' : isHucha ? ' <span style="font-size:0.65rem;color:var(--accent-yellow);font-weight:700">(hucha)</span>' : '';
+                return `<div class="transaction-item"><div class="transaction-icon ${iconCls}">${cat?.emoji || '📌'}</div><div class="transaction-info" onclick="editTransaction(${t.id})"><div class="transaction-desc">${escapeHtml(t.description)}</div><div class="transaction-category">${cat?.name || 'Otro'}${infoBadge} · ${new Date(t.date + 'T12:00:00').getDate()} ${monthShort[currentDate.getMonth()]}</div></div><div class="transaction-amount ${amtCls}">${amtStr}</div><div class="transaction-actions"><button class="transaction-btn edit" onclick="editTransaction(${t.id})">✏️</button><button class="transaction-btn delete" onclick="deleteTransaction(${t.id})">🗑️</button></div></div>`;
             }).join('');
         }
         
         function toggleYearSummary() { document.getElementById('yearSummary').classList.toggle('active'); }
         
         let projectionMode = false;
+        let projectionYear = new Date().getFullYear();
+
+        function populateYearSelector() {
+            const sel = document.getElementById('yearSelector');
+            const todayYear = new Date().getFullYear();
+            const years = transactions.map(t => new Date(t.date + 'T12:00:00').getFullYear());
+            const minYear = years.length ? Math.min(...years) : todayYear;
+            const maxYear = todayYear + 5;
+            // Guardar selección actual
+            const current = parseInt(sel.value) || projectionYear;
+            sel.innerHTML = '';
+            for (let y = minYear; y <= maxYear; y++) {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                if (y === current) opt.selected = true;
+                sel.appendChild(opt);
+            }
+            projectionYear = parseInt(sel.value);
+        }
+
+        function changeProjectionYear(val) {
+            projectionYear = parseInt(val);
+            const todayYear = new Date().getFullYear();
+            // Años futuros: proyección siempre activa
+            if (projectionYear > todayYear) {
+                projectionMode = true;
+                document.getElementById('projToggleBtn').classList.add('active');
+            }
+            document.getElementById('projToggleBtn').classList.toggle('hidden', projectionYear > todayYear);
+            updateYearSummary();
+        }
 
         function toggleProjection() {
             projectionMode = !projectionMode;
@@ -569,32 +630,46 @@
         }
 
         function updateYearSummary() {
-            const y = currentDate.getFullYear();
-            const todayMonth = new Date().getMonth(); // 0-based
+            const y = projectionYear;
+            const todayMonth = new Date().getMonth();
             const todayYear = new Date().getFullYear();
-            document.getElementById('summaryYear').textContent = y;
+            const isFutureYear = y > todayYear;
+            const isCurrentYear = y === todayYear;
 
+            // Datos reales del año seleccionado
             const tx = transactions.filter(t => new Date(t.date + 'T12:00:00').getFullYear() === y);
             const real = Array(12).fill(null).map(() => ({ income: 0, expense: 0 }));
-            tx.forEach(t => { const m = new Date(t.date + 'T12:00:00').getMonth(); real[m][t.type] += t.amount; });
+            tx.forEach(t => {
+                if (INFO_ONLY_CATS.has(t.category)) return; // solo informativo, no suma en barras
+                const m = new Date(t.date + 'T12:00:00').getMonth();
+                real[m][t.type] += t.amount;
+            });
 
-            // Rendimiento mensual de inversiones activas en el año
             const today = new Date().toISOString().slice(0, 10);
-            const invMonthly = investments
-                .filter(inv => inv.start_date <= today && inv.end_date >= `${y}-01-01` && inv.start_date <= `${y}-12-31`)
-                .reduce((s, inv) => s + inv.monthly_return, 0);
-            const invCapital = investments
-                .filter(inv => inv.start_date.slice(0,4) <= String(y) && inv.end_date.slice(0,4) >= String(y))
-                .reduce((s, inv) => s + inv.capital, 0);
 
-            // Calcular media de meses CON datos reales (excluyendo meses sin actividad)
-            const pastMonths = real.slice(0, y < todayYear ? 12 : todayMonth + 1).filter(m => m.income > 0 || m.expense > 0);
-            const avgInc = pastMonths.length ? pastMonths.reduce((s, m) => s + m.income, 0) / pastMonths.length : 0;
-            const avgExp = pastMonths.length ? pastMonths.reduce((s, m) => s + m.expense, 0) / pastMonths.length : 0;
+            // Media mensual histórica (todos los meses reales con datos hasta hoy)
+            const allRealMonths = [];
+            const allYears = [...new Set(transactions.map(t => new Date(t.date + 'T12:00:00').getFullYear()))].sort();
+            allYears.forEach(yr => {
+                const ytx = transactions.filter(t => new Date(t.date + 'T12:00:00').getFullYear() === yr);
+                const yr_real = Array(12).fill(null).map(() => ({ income: 0, expense: 0 }));
+                ytx.forEach(t => {
+                    if (INFO_ONLY_CATS.has(t.category)) return; // no distorsiona la media
+                    const mm = new Date(t.date + 'T12:00:00').getMonth();
+                    yr_real[mm][t.type] += t.amount;
+                });
+                const limit = yr < todayYear ? 12 : todayMonth + 1;
+                yr_real.slice(0, limit).forEach(m => { if (m.income > 0 || m.expense > 0) allRealMonths.push(m); });
+            });
+            const avgBase = isFutureYear ? allRealMonths :
+                real.slice(0, todayMonth + 1).filter(m => m.income > 0 || m.expense > 0);
+            const avgInc = avgBase.length ? avgBase.reduce((s, m) => s + m.income, 0) / avgBase.length : 0;
+            const avgExp = avgBase.length ? avgBase.reduce((s, m) => s + m.expense, 0) / avgBase.length : 0;
 
+            // Construir datos del gráfico
             const data = real.map((m, i) => {
-                const isFuture = projectionMode && y === todayYear && i > todayMonth;
-                if (isFuture) return { income: avgInc + invMonthly, expense: avgExp, projected: true };
+                const shouldProject = isFutureYear || (projectionMode && isCurrentYear && i > todayMonth);
+                if (shouldProject) return { income: avgInc, expense: avgExp, projected: true };
                 return { ...m, projected: false };
             });
 
@@ -609,28 +684,64 @@
                 </div>`
             ).join('');
 
-            const totRealInc = real.reduce((s, m) => s + m.income, 0);
-            const totRealExp = real.reduce((s, m) => s + m.expense, 0);
+            // ── Patrimonio acumulado (siempre histórico, nunca solo el año) ──────────
+            // hucha SÍ cuenta en patrimonio (es dinero real ahorrado)
+            // investment NO cuenta (es informativo; el capital está en la tabla investments)
+            const allTimeInc = transactions
+                .filter(t => t.type === 'income' && t.category !== 'investment')
+                .reduce((s, t) => s + t.amount, 0);
+            const allTimeExp = transactions
+                .filter(t => t.type === 'expense')
+                .reduce((s, t) => s + t.amount, 0);
+            const basePatrimony = allTimeInc - allTimeExp;
 
-            let totInc = totRealInc, totExp = totRealExp;
-            const isCurrentYear = y === todayYear;
-            const futureMths = projectionMode && isCurrentYear ? (11 - todayMonth) : 0;
-            if (projectionMode && isCurrentYear) {
-                totInc += (avgInc + invMonthly) * futureMths;
-                totExp += avgExp * futureMths;
+            // Totales para mostrar
+            let totInc, totExp, patrimony;
+            if (isFutureYear) {
+                // Proyectar meses desde hoy hasta fin del año y
+                let projectedSavings = 0;
+                for (let yr = todayYear; yr <= y; yr++) {
+                    const startM = yr === todayYear ? todayMonth + 1 : 0;
+                    const mths = 12 - startM;
+                    projectedSavings += mths * (avgInc - avgExp);
+                }
+                totInc = avgInc * 12;
+                totExp = avgExp * 12;
+                patrimony = basePatrimony + projectedSavings;
+            } else {
+                const totRealInc = real.reduce((s, m) => s + m.income, 0);
+                const totRealExp = real.reduce((s, m) => s + m.expense, 0);
+                totInc = totRealInc;
+                totExp = totRealExp;
+                if (projectionMode && isCurrentYear) {
+                    const futureMths = 11 - todayMonth;
+                    totInc += avgInc * futureMths;
+                    totExp += avgExp * futureMths;
+                    const projSavings = futureMths * (avgInc - avgExp);
+                    patrimony = basePatrimony + projSavings;
+                } else {
+                    patrimony = basePatrimony;
+                }
             }
 
             const badge = document.getElementById('projBadge');
-            badge.classList.toggle('hidden', !projectionMode || !isCurrentYear);
+            badge.classList.toggle('hidden', !isFutureYear && (!projectionMode || !isCurrentYear));
+            document.getElementById('projToggleBtn').classList.toggle('hidden', isFutureYear);
 
-            const incLabel = projectionMode && isCurrentYear ? 'Ingresos est.' : 'Ingresos';
-            const expLabel = projectionMode && isCurrentYear ? 'Gastos est.' : 'Gastos';
-            document.getElementById('yearIncomeLabel').textContent = incLabel;
-            document.getElementById('yearExpenseLabel').textContent = expLabel;
+            const estimated = isFutureYear || (projectionMode && isCurrentYear);
+            const ahorro = totInc - totExp;
+            const ahorroColor = ahorro >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+            document.getElementById('yearIncomeLabel').textContent = estimated ? 'Ingresos est.' : 'Ingresos';
+            document.getElementById('yearExpenseLabel').textContent = estimated ? 'Gastos est.' : 'Gastos';
+            document.getElementById('yearAhorroLabel').textContent = estimated ? 'Ahorro est.' : 'Ahorro';
+            document.getElementById('yearAhorro').textContent = formatMoney(ahorro);
+            document.getElementById('yearAhorro').style.color = ahorroColor;
+            document.getElementById('yearSavings').innerHTML = isFutureYear
+                ? `${formatMoney(patrimony)} <span style="font-size:0.65rem;color:var(--text-secondary);display:block">acumulado al ${y}</span>`
+                : formatMoney(patrimony);
 
             document.getElementById('yearIncome').textContent = formatMoney(totInc);
             document.getElementById('yearExpense').textContent = formatMoney(totExp);
-            document.getElementById('yearSavings').textContent = formatMoney((totInc - totExp) + invCapital);
         }
         
         // Modal

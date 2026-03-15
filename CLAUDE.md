@@ -44,18 +44,25 @@ docker-compose.yml      — dos volúmenes: mi-ahorro-data y mi-ahorro-certs
 | POST | /api/transactions | Crea transacción |
 | PUT | /api/transactions/:id | Actualiza transacción |
 | DELETE | /api/transactions/:id | Elimina transacción |
+| GET | /api/investments | Lista todas las inversiones |
+| POST | /api/investments | Crea inversión |
+| PUT | /api/investments/:id | Actualiza inversión |
+| DELETE | /api/investments/:id | Elimina inversión |
 
 Sin sesión → 401. ID inexistente en PUT/DELETE → 404.
 
 ## Esquema SQLite
 ```sql
 transactions (id, type TEXT CHECK IN('income','expense'), amount REAL, description TEXT, category TEXT, date TEXT, created_at DATETIME)
+investments (id, name TEXT, capital REAL, monthly_return REAL, start_date TEXT, end_date TEXT, notes TEXT, created_at DATETIME)
 ```
 Índice en `date`.
 
 ## Categorías válidas (sincronizadas entre server.js y index.html)
-- **Ingresos:** salary, bonus, investment, other_in
+- **Ingresos:** salary, bonus, investment, hucha, other_in
 - **Gastos:** food, home, transport, health, leisure, restaurant, bills, other_out
+
+**Categorías informativas** (`INFO_ONLY_CATS = {'investment', 'hucha'}`): no suman en barras del gráfico ni en totales de ingresos/gastos, pero sí aparecen en el calendario y en el resumen de patrimonio (hucha sí cuenta en patrimonio; investment no, porque el capital está en la tabla investments).
 
 ## Flujo de desarrollo y despliegue
 
@@ -73,12 +80,26 @@ cmd /c "npm run dev"
 > docker-compose.dev.yml activa NODE_ENV=development para que la cookie de sesión
 > funcione sobre HTTP. En producción (NAS) siempre usar solo docker-compose.yml con HTTPS.
 
-### Despliegue al NAS
-1. Copiar al NAS **estos archivos** (excluir node_modules/, data/, certs/, .env):
-   - server.js, public/, package.json, package-lock.json, Dockerfile, docker-compose.yml, docker-entrypoint.sh, .env.example
-2. En el NAS: crear/actualizar `.env` con valores de producción (nueva SESSION_SECRET)
-3. En el NAS: `docker compose down && docker compose up --build -d`
-4. Los volúmenes `mi-ahorro-data` y `mi-ahorro-certs` conservan la BD y los certs
+### Despliegue al NAS (flujo Git)
+El NAS tiene el repo clonado en `/Volume2/Datos/Docker/mi-ahorro` (share Windows: `\\192.168.1.199\Datos\Docker\mi-ahorro`).
+
+**Flujo desde local:**
+```sh
+# 1. Commit + push
+git push origin main
+
+# 2. Pull directo en el share del NAS
+git -C "//192.168.1.199/Datos/Docker/mi-ahorro" pull
+
+# 3. Build y deploy (SSH al NAS o desde terminal NAS)
+docker compose build --no-cache && docker compose up -d
+```
+
+**Notas:**
+- El `.env` en el NAS NO está en git — nunca se sobreescribe con el pull.
+- Los volúmenes `mi-ahorro-data` y `mi-ahorro-certs` conservan la BD y los certs.
+- El botón "Construir" del Docker Manager TOS **no reconstruye** — usar siempre `--no-cache` por SSH.
+- `safe.directory` configurado en git global para `%(prefix)///192.168.1.199/Datos/Docker/mi-ahorro`.
 
 ### Renovar certificados SSL en el NAS
 ```sh
@@ -137,3 +158,15 @@ docker compose restart mi-ahorro
 - Sin volumen para certs en docker-compose de producción con certs Let's Encrypt reales
 - Vulnerabilidades en sqlite3 nativo (npm audit) — pendiente de actualización del paquete
 - Script `dev` usa npx nodemon — instalar nodemon como devDependency si se usa frecuentemente
+- Sin tests (ninguno) — app personal de un solo usuario, no prioritario
+
+## Historial de cambios
+| Fecha | Cambio |
+|---|---|
+| 2026-03-15 | Categoría `hucha` añadida (server.js + frontend) |
+| 2026-03-15 | Dots de colores en calendario para investment (azul) y hucha (amarillo) |
+| 2026-03-15 | Selector de año en resumen anual — permite ver histórico y proyectar años futuros |
+| 2026-03-15 | Columna "Ahorro" en totales del año (4 columnas: Ingresos, Gastos, Ahorro, Patrimonio) |
+| 2026-03-15 | Patrimonio calculado como acumulado histórico — hucha suma, investment no |
+| 2026-03-15 | INFO_ONLY_CATS: investment y hucha no distorsionan medias ni barras del gráfico |
+| 2026-03-15 | Deploy cambiado a flujo Git: push local → git pull en NAS share → docker-compose |

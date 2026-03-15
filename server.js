@@ -20,7 +20,7 @@ if (!APP_PASSWORD) {
 
 // Categorías válidas (sincronizadas con el frontend)
 const VALID_CATEGORIES = [
-    'salary', 'bonus', 'investment', 'other_in',
+    'salary', 'bonus', 'investment', 'hucha', 'other_in',
     'food', 'home', 'transport', 'health', 'leisure', 'restaurant', 'bills', 'other_out'
 ];
 const VALID_TYPES = ['income', 'expense'];
