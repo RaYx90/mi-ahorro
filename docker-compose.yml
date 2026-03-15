@@ -2,22 +2,25 @@ services:
   mi-ahorro:
     build: .
     container_name: mi-ahorro
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "128M"
     ports:
       - "3000:3000"
-      - "3443:3443"
-    volumes:
-      - mi-ahorro-data:/app/data
-      - mi-ahorro-certs:/app/certs
-    env_file:
-      - .env
     environment:
-      - NODE_ENV=production
-      - DB_PATH=/app/data/finanzas.db
-      - CERT_PATH=/app/certs
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD}@postgres:5432/miahorro"
+      APP_PASSWORD: "${APP_PASSWORD}"
+      SESSION_SECRET: "${SESSION_SECRET}"
+      NODE_ENV: production
+    networks:
+      - postgres-net
+      - caddy-net
+    restart: unless-stopped
 
-volumes:
-  mi-ahorro-data:
-    driver: local
-  mi-ahorro-certs:
-    driver: local
+networks:
+  postgres-net:
+    external: true
+  caddy-net:
+    external: true

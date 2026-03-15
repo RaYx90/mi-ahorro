@@ -5,22 +5,20 @@ App web de control de finanzas del hogar. Un solo usuario. Interfaz mobile-first
 Desplegada en un NAS doméstico con Docker. Acceso desde navegador local/LAN.
 
 ## Stack
-- **Backend:** Node.js + Express (server.js)
-- **Base de datos:** SQLite3 (archivo en volumen Docker `/app/data/finanzas.db`)
-- **Frontend:** HTML/CSS/JS puro, sin frameworks (public/index.html, ~514 líneas)
+- **Backend:** Node.js 20 + Express (server.js)
+- **Base de datos:** PostgreSQL 17 (contenedor externo compartido, red `postgres-net`)
+- **Frontend:** HTML/CSS/JS puro, sin frameworks (public/index.html)
 - **Auth:** Cookie de sesión con express-session (httpOnly, secure, sameSite=strict, 8h)
 - **Seguridad:** helmet (cabeceras HTTP), escapeHtml manual (anti-XSS)
+- **TLS:** Caddy reverse proxy externo (contenedor caddy-proxy, red `caddy-net`)
 - **Contenedor:** Docker + docker-compose
 
 ## Estructura de archivos
 ```
-server.js               — servidor Express, API REST, auth
+server.js               — servidor Express, API REST, auth, PostgreSQL (pg)
 public/index.html       — frontend completo (CSS + HTML + JS en un solo archivo)
-data/finanzas.db        — base de datos SQLite (en volumen Docker, NO versionar)
-certs/                  — certificados SSL (en volumen Docker, NO versionar)
-docker-entrypoint.sh    — genera certs si no existen, luego arranca node
 Dockerfile              — imagen node:20.19.0-alpine, usuario no-root nodejs (uid 1001)
-docker-compose.yml      — dos volúmenes: mi-ahorro-data y mi-ahorro-certs
+docker-compose.yml      — servicio mi-ahorro, redes externas postgres-net y caddy-net
 .env                    — variables de entorno locales (NO versionar)
 .env.example            — plantilla de variables (sí versionar)
 ```
@@ -30,10 +28,11 @@ docker-compose.yml      — dos volúmenes: mi-ahorro-data y mi-ahorro-certs
 |---|---|
 | APP_PASSWORD | Contraseña de acceso a la app |
 | SESSION_SECRET | Secreto para firmar cookies de sesión (aleatoria y larga) |
-| PORT | Puerto HTTP (default: 3000) |
-| HTTPS_PORT | Puerto HTTPS (default: 3443) |
-| DB_PATH | Ruta SQLite (default: /app/data/finanzas.db) |
-| CERT_PATH | Ruta certificados SSL (default: /app/certs) |
+| POSTGRES_USER | Usuario PostgreSQL (default: admin) |
+| POSTGRES_PASSWORD | Contraseña PostgreSQL |
+
+La connection string se construye automáticamente en docker-compose.yml:
+`postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/miahorro`
 
 ## API REST (todos los endpoints requieren sesión activa)
 | Método | Ruta | Descripción |
@@ -51,12 +50,12 @@ docker-compose.yml      — dos volúmenes: mi-ahorro-data y mi-ahorro-certs
 
 Sin sesión → 401. ID inexistente en PUT/DELETE → 404.
 
-## Esquema SQLite
+## Esquema PostgreSQL
 ```sql
-transactions (id, type TEXT CHECK IN('income','expense'), amount REAL, description TEXT, category TEXT, date TEXT, created_at DATETIME)
-investments (id, name TEXT, capital REAL, monthly_return REAL, start_date TEXT, end_date TEXT, notes TEXT, created_at DATETIME)
+transactions (id SERIAL PK, type TEXT CHECK, amount NUMERIC(12,2), description TEXT, category TEXT, date DATE, created_at TIMESTAMPTZ)
+investments (id SERIAL PK, name TEXT, capital NUMERIC(12,2), monthly_return NUMERIC(12,2), start_date DATE, end_date DATE, notes TEXT, created_at TIMESTAMPTZ)
 ```
-Índice en `date`.
+Índice en `transactions(date)`.
 
 ## Categorías válidas (sincronizadas entre server.js y index.html)
 - **Ingresos:** salary, bonus, investment, hucha, other_in
@@ -66,19 +65,13 @@ investments (id, name TEXT, capital REAL, monthly_return REAL, start_date TEXT, 
 
 ## Flujo de desarrollo y despliegue
 
-### Desarrollo local (Windows con Docker Desktop)
+### Desarrollo local
 ```sh
-# Con Docker (pruebas locales por HTTP — usa docker-compose.dev.yml):
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-# App en http://localhost:3000 (cookie sin "secure", funciona en HTTP)
+# Con hot-reload (requiere PostgreSQL corriendo y DATABASE_URL en .env):
+npm run dev
 
-# Con hot-reload sin Docker (crear data/ primero):
-cmd /c "npm run dev"
-# Requiere APP_PASSWORD y SESSION_SECRET en el .env
+# Requiere APP_PASSWORD, SESSION_SECRET y DATABASE_URL en el .env
 ```
-
-> docker-compose.dev.yml activa NODE_ENV=development para que la cookie de sesión
-> funcione sobre HTTP. En producción (NAS) siempre usar solo docker-compose.yml con HTTPS.
 
 ### Despliegue al NAS (flujo Git)
 El NAS tiene el repo clonado en `/Volume2/Datos/Docker/mi-ahorro` (share Windows: `\\192.168.1.199\Datos\Docker\mi-ahorro`).
@@ -97,66 +90,45 @@ docker compose build --no-cache && docker compose up -d
 
 **Notas:**
 - El `.env` en el NAS NO está en git — nunca se sobreescribe con el pull.
-- Los volúmenes `mi-ahorro-data` y `mi-ahorro-certs` conservan la BD y los certs.
-- El botón "Construir" del Docker Manager TOS **no reconstruye** — usar siempre `--no-cache` por SSH.
 - `safe.directory` configurado en git global para `%(prefix)///192.168.1.199/Datos/Docker/mi-ahorro`.
 
-### Renovar certificados SSL en el NAS
-```sh
-docker compose exec mi-ahorro sh
-# Dentro del contenedor:
-rm /app/certs/key.pem /app/certs/cert.pem
-exit
-docker compose restart mi-ahorro
-# El entrypoint regenera los certs automáticamente
-```
+### Servicios externos (sus propios repos/compose)
+| Service | Repo | Red externa |
+|---|---|---|
+| `postgres` | `postgres` | `postgres-net` |
+| `caddy-proxy` | `caddy-proxy` | `caddy-net` |
 
 ## Decisiones de arquitectura tomadas
 
 ### Cookie de sesión vs JWT
 **Decisión: cookie de sesión (express-session)**
 - App de un solo usuario en NAS doméstico → no hay múltiples servidores ni microservicios
-- El logout con JWT no es inmediato (el token sigue válido hasta expirar); con cookie de sesión sí
-- `httpOnly` + `sameSite: strict` + `secure` protege contra XSS, CSRF e intercepción en red
-- JWT añadiría complejidad sin ningún beneficio real en este contexto
+- `httpOnly` + `sameSite: strict` + `secure` protege contra XSS, CSRF e intercepción
 
-### SQLite vs PostgreSQL/MySQL
-**Decisión: SQLite**
-- Un solo usuario, escrituras ocasionales → SQLite es más que suficiente
-- Sin servidor de BD separado → despliegue más simple en NAS
-- La BD es un único archivo, fácil de hacer backup
+### PostgreSQL (compartido) vs SQLite
+**Decisión: PostgreSQL** (migrado desde SQLite en 2026-03-15)
+- BD compartida con gamelist-dotnet — un solo contenedor PostgreSQL para el NAS
+- Tipos más ricos (NUMERIC, DATE, TIMESTAMPTZ) vs TEXT para todo
+- Backups centralizados con pg_dump
 
 ### Frontend en un solo archivo vs React/Vue
 **Decisión: HTML/CSS/JS puro en un archivo**
 - Sin proceso de build → despliegue trivial
-- Sin dependencias de frontend → sin vulnerabilidades de npm en el cliente
 - Suficiente para la funcionalidad requerida
-
-### Certificados en volumen vs en imagen Docker
-**Decisión: generados en docker-entrypoint.sh, almacenados en volumen**
-- No quedan claves privadas quemadas en la imagen
-- Permiten renovación sin reconstruir la imagen (`rm certs + restart`)
-- Se pueden reemplazar por certs reales (Let's Encrypt) sin modificar el Dockerfile
 
 ## Problemas de seguridad YA corregidos (no volver a reportar)
 - ✅ Contraseña hardcodeada en el cliente → movida a .env, autenticación en el backend
 - ✅ API REST sin autenticación → middleware `requireAuth` en todos los endpoints
 - ✅ XSS por innerHTML sin sanitizar → función `escapeHtml()` aplicada en renderTransactions()
 - ✅ Sin cabeceras de seguridad → `helmet()` como primer middleware
-- ✅ Certs en la imagen Docker → generados en entrypoint, almacenados en volumen
-- ✅ Errores genéricos sin logging → `console.error(err)` en todos los manejadores
 - ✅ Validación insuficiente → amount>0, description≤200, date regex, category/type contra lista
-- ✅ PUT/DELETE sin verificar existencia → 404 si `this.changes === 0`
-- ✅ Sin .gitignore → creado (excluye node_modules, data, certs, .env)
+- ✅ PUT/DELETE sin verificar existencia → 404 si rowCount === 0
 - ✅ npm install no determinista → cambiado a `npm ci` en Dockerfile
 - ✅ node:20-alpine sin versión exacta → `node:20.19.0-alpine`
 - ✅ Sin HEALTHCHECK → añadido en Dockerfile
-- ✅ sessionStorage para auth → eliminado, ahora todo es cookie de servidor
 
 ## Deuda técnica conocida (pendiente)
 - Sin paginación en GET /api/transactions (carga todo en memoria — irrelevante hasta miles de registros)
-- Sin volumen para certs en docker-compose de producción con certs Let's Encrypt reales
-- Vulnerabilidades en sqlite3 nativo (npm audit) — pendiente de actualización del paquete
 - Script `dev` usa npx nodemon — instalar nodemon como devDependency si se usa frecuentemente
 - Sin tests (ninguno) — app personal de un solo usuario, no prioritario
 
@@ -170,3 +142,4 @@ docker compose restart mi-ahorro
 | 2026-03-15 | Patrimonio calculado como acumulado histórico — hucha suma, investment no |
 | 2026-03-15 | INFO_ONLY_CATS: investment y hucha no distorsionan medias ni barras del gráfico |
 | 2026-03-15 | Deploy cambiado a flujo Git: push local → git pull en NAS share → docker-compose |
+| 2026-03-15 | Migración SQLite → PostgreSQL: server.js reescrito con pg, Dockerfile simplificado, TLS delegado a Caddy externo |
