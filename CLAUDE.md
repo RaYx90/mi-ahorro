@@ -1,15 +1,15 @@
 # Contexto del proyecto: mi-ahorro
 
 ## Qué es
-App web de control de finanzas del hogar. Un solo usuario. Interfaz mobile-first en español.
+App web de control de finanzas del hogar. Multi-usuario (registro manual en BD). Interfaz mobile-first en español.
 Desplegada en un NAS doméstico con Docker. Acceso desde navegador local/LAN.
 
 ## Stack
 - **Backend:** Node.js 20 + Express (server.js)
 - **Base de datos:** PostgreSQL 17 (contenedor externo compartido, red `postgres`)
 - **Frontend:** HTML/CSS/JS puro, sin frameworks (public/index.html)
-- **Auth:** Cookie de sesión con express-session (httpOnly, secure, sameSite=strict, 8h)
-- **Seguridad:** helmet (cabeceras HTTP), escapeHtml manual (anti-XSS)
+- **Auth:** Login usuario/password (bcrypt hash), cookie de sesión express-session (httpOnly, secure, sameSite=lax, 8h)
+- **Seguridad:** helmet (cabeceras HTTP), escapeHtml (anti-XSS), rate limiting login (5 intentos/15min), trust proxy para Caddy
 - **TLS:** Caddy reverse proxy externo (contenedor caddy-proxy, red `caddy`)
 - **Contenedor:** Docker + docker-compose
 
@@ -26,13 +26,19 @@ docker-compose.yml      — servicio mi-ahorro, redes externas postgres y caddy
 ## Variables de entorno (.env)
 | Variable | Descripción |
 |---|---|
-| APP_PASSWORD | Contraseña de acceso a la app |
 | SESSION_SECRET | Secreto para firmar cookies de sesión (aleatoria y larga) |
-| POSTGRES_USER | Usuario PostgreSQL (default: admin) |
-| POSTGRES_PASSWORD | Contraseña PostgreSQL |
+| DB_PASSWORD | Contraseña del usuario miahorro en PostgreSQL |
 
-La connection string se construye automáticamente en docker-compose.yml:
-`postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/miahorro`
+La connection string se construye en docker-compose.yml:
+`postgresql://miahorro:${DB_PASSWORD}@postgres:5432/miahorro`
+
+## Gestión de usuarios
+No hay registro público. Los usuarios se crean manualmente:
+```sh
+# Desde local apuntando al PostgreSQL del NAS (o usar create-user.js)
+PGHOST=192.168.1.199 PGDATABASE=miahorro PGUSER=admin PGPASSWORD=... node create-user.js "email@ejemplo.com" "password"
+```
+Tabla `users`: id, username (email), password_hash (bcrypt 12 rounds), created_at.
 
 ## API REST (todos los endpoints requieren sesión activa)
 | Método | Ruta | Descripción |
@@ -102,8 +108,9 @@ docker compose build --no-cache && docker compose up -d
 
 ### Cookie de sesión vs JWT
 **Decisión: cookie de sesión (express-session)**
-- App de un solo usuario en NAS doméstico → no hay múltiples servidores ni microservicios
-- `httpOnly` + `sameSite: strict` + `secure` protege contra XSS, CSRF e intercepción
+- Multi-usuario en NAS doméstico → no hay múltiples servidores ni microservicios
+- `httpOnly` + `sameSite: lax` + `secure` protege contra XSS, CSRF e intercepción
+- `trust proxy` para que Express detecte HTTPS detrás de Caddy
 
 ### PostgreSQL (compartido) vs SQLite
 **Decisión: PostgreSQL** (migrado desde SQLite en 2026-03-15)
@@ -117,7 +124,9 @@ docker compose build --no-cache && docker compose up -d
 - Suficiente para la funcionalidad requerida
 
 ## Problemas de seguridad YA corregidos (no volver a reportar)
-- ✅ Contraseña hardcodeada en el cliente → movida a .env, autenticación en el backend
+- ✅ Contraseña hardcodeada → login con usuario/password en BD (bcrypt)
+- ✅ Sin rate limiting → express-rate-limit (5 intentos/15 min) en /api/login
+- ✅ Password única compartida → usuarios individuales con hash bcrypt 12 rounds
 - ✅ API REST sin autenticación → middleware `requireAuth` en todos los endpoints
 - ✅ XSS por innerHTML sin sanitizar → función `escapeHtml()` aplicada en renderTransactions()
 - ✅ Sin cabeceras de seguridad → `helmet()` como primer middleware
@@ -146,3 +155,8 @@ docker compose build --no-cache && docker compose up -d
 | 2026-03-16 | Redes Docker renombradas: postgres-net → postgres, caddy-net → caddy |
 | 2026-03-16 | Healthcheck: 127.0.0.1 en vez de localhost (fix IPv6 en Alpine) |
 | 2026-03-16 | Datos migrados a PostgreSQL compartido: 107 transactions + 1 investment |
+| 2026-03-16 | Fix: trust proxy + sameSite lax para sesión detrás de Caddy |
+| 2026-03-16 | Fix: pg devuelve DATE/NUMERIC como strings — parseFloat en frontend, type parsers en server |
+| 2026-03-16 | Auth refactor: login con usuario/password en BD (bcrypt 12 rounds) + rate limiting (5/15min) |
+| 2026-03-16 | Toggle mostrar/ocultar password en login |
+| 2026-03-16 | Eliminado APP_PASSWORD — usuarios en tabla users |
