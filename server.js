@@ -37,6 +37,9 @@ app.use(helmet({
     }
 }));
 
+// Confiar en Caddy reverse proxy para X-Forwarded-Proto
+app.set('trust proxy', 1);
+
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
@@ -44,7 +47,7 @@ app.use(session({
     cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: 'lax',
         maxAge: 8 * 60 * 60 * 1000 // 8 horas
     }
 }));
