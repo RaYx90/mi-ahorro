@@ -3,6 +3,8 @@ const http = require('http');
 const path = require('path');
 const helmet = require('helmet');
 const session = require('express-session');
+const bcrypt = require('bcrypt');
+const rateLimit = require('express-rate-limit');
 const { Pool, types } = require('pg');
 
 // Devolver DATE y TIMESTAMPTZ como strings (no objetos Date) para compatibilidad con el frontend
@@ -12,13 +14,7 @@ types.setTypeParser(1184, val => val); // TIMESTAMPTZ
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const APP_PASSWORD = process.env.APP_PASSWORD;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-in-production';
-
-if (!APP_PASSWORD) {
-    console.error('ERROR: APP_PASSWORD no está definida. Configura la variable de entorno.');
-    process.exit(1);
-}
 
 // Categorías válidas (sincronizadas con el frontend)
 const VALID_CATEGORIES = [
@@ -60,12 +56,27 @@ app.use(session({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Rate limiting login ─────────────────────────────────────────────────────────
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 5, // máximo 5 intentos
+    message: { error: 'Demasiados intentos. Espera 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 // ── Base de datos ──────────────────────────────────────────────────────────────
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://admin:password@localhost:5432/miahorro'
 });
 
 async function initDb() {
+    await pool.query(`CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
     await pool.query(`CREATE TABLE IF NOT EXISTS transactions (
         id SERIAL PRIMARY KEY,
         type TEXT NOT NULL CHECK(type IN ('income', 'expense')),
@@ -92,7 +103,7 @@ initDb().catch(err => { console.error('Error inicializando BD:', err); process.e
 
 // ── Middlewares ────────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
-    if (req.session && req.session.loggedIn) return next();
+    if (req.session && req.session.userId) return next();
     res.status(401).json({ error: 'No autorizado' });
 }
 
@@ -124,13 +135,31 @@ function validateTransaction(body, partial = false) {
 }
 
 // ── Auth endpoints ─────────────────────────────────────────────────────────────
-app.post('/api/login', (req, res) => {
-    const { password } = req.body || {};
-    if (!password || password !== APP_PASSWORD) {
-        return res.status(401).json({ error: 'Contraseña incorrecta' });
+app.post('/api/login', loginLimiter, async (req, res) => {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+        return res.status(401).json({ error: 'Usuario y contraseña requeridos' });
     }
-    req.session.loggedIn = true;
-    res.json({ ok: true });
+
+    try {
+        const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        if (rows.length === 0) {
+            return res.status(401).json({ error: 'Credenciales incorrectas' });
+        }
+
+        const user = rows[0];
+        const valid = await bcrypt.compare(password, user.password_hash);
+        if (!valid) {
+            return res.status(401).json({ error: 'Credenciales incorrectas' });
+        }
+
+        req.session.userId = user.id;
+        req.session.username = user.username;
+        res.json({ ok: true, username: user.username });
+    } catch (err) {
+        console.error('Error en login:', err);
+        res.status(500).json({ error: 'Error interno' });
+    }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -286,7 +315,7 @@ app.delete('/api/investments/:id', requireAuth, async (req, res) => {
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
-http.createServer(app).listen(PORT, '0.0.0.0', () => console.log(`🚀 HTTP: http://localhost:${PORT}`));
+http.createServer(app).listen(PORT, '0.0.0.0', () => console.log(`HTTP: http://localhost:${PORT}`));
 
 process.on('SIGINT', async () => { await pool.end(); process.exit(0); });
 process.on('SIGTERM', async () => { await pool.end(); process.exit(0); });

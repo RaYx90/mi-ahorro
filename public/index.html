@@ -205,9 +205,10 @@
     <div class="login-screen" id="loginScreen">
         <div class="login-box">
             <h1>💰 Mi Ahorro</h1>
-            <p>Introduce la contraseña para acceder</p>
-            <div class="error hidden" id="loginError">Contraseña incorrecta</div>
-            <input type="password" id="loginPass" placeholder="••••••••" autofocus>
+            <p>Introduce tus credenciales</p>
+            <div class="error hidden" id="loginError">Credenciales incorrectas</div>
+            <input type="email" id="loginUser" placeholder="Correo electrónico" autocomplete="username" autofocus>
+            <input type="password" id="loginPass" placeholder="Contraseña" autocomplete="current-password">
             <button onclick="doLogin()">Entrar</button>
         </div>
     </div>
@@ -374,27 +375,33 @@
         
         // Login
         async function doLogin() {
-            const pass = document.getElementById('loginPass').value;
+            const username = document.getElementById('loginUser').value.trim();
+            const password = document.getElementById('loginPass').value;
+            if (!username || !password) return;
             try {
                 const res = await fetch(API_URL + '/login', {
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: pass })
+                    body: JSON.stringify({ username, password })
                 });
                 if (res.ok) {
                     document.getElementById('loginError').classList.add('hidden');
                     showApp();
                 } else {
+                    const data = await res.json().catch(() => ({}));
+                    document.getElementById('loginError').textContent = data.error || 'Credenciales incorrectas';
                     document.getElementById('loginError').classList.remove('hidden');
                 }
             } catch (e) {
+                document.getElementById('loginError').textContent = 'Error de conexión';
                 document.getElementById('loginError').classList.remove('hidden');
             }
         }
         
         async function doLogout() {
             try { await apiFetch(API_URL + '/logout', { method: 'POST' }); } catch (e) {}
+            document.getElementById('loginUser').value = '';
             document.getElementById('loginPass').value = '';
             showLogin();
         }
@@ -413,6 +420,7 @@
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('loginUser').addEventListener('keypress', e => { if (e.key === 'Enter') document.getElementById('loginPass').focus(); });
             document.getElementById('loginPass').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
             // Verificar sesión activa al cargar
             fetch(API_URL + '/transactions', { credentials: 'include' })
