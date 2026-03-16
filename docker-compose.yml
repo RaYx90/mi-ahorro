@@ -15,12 +15,12 @@ services:
       SESSION_SECRET: "${SESSION_SECRET}"
       NODE_ENV: production
     networks:
-      - postgres-net
-      - caddy-net
+      - postgres
+      - caddy
     restart: unless-stopped
 
 networks:
-  postgres-net:
+  postgres:
     external: true
-  caddy-net:
+  caddy:
     external: true
