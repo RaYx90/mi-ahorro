@@ -45,11 +45,12 @@ app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    rolling: true,
     cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 8 * 60 * 60 * 1000 // 8 horas
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 días (se renueva con cada petición)
     }
 }));
 
