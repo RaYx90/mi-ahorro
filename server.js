@@ -3,7 +3,12 @@ const http = require('http');
 const path = require('path');
 const helmet = require('helmet');
 const session = require('express-session');
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// Devolver DATE y TIMESTAMPTZ como strings (no objetos Date) para compatibilidad con el frontend
+types.setTypeParser(1082, val => val); // DATE
+types.setTypeParser(1114, val => val); // TIMESTAMP
+types.setTypeParser(1184, val => val); // TIMESTAMPTZ
 
 const app = express();
 const PORT = process.env.PORT || 3000;
