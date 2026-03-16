@@ -424,7 +424,7 @@
         async function loadTransactions() {
             try {
                 const res = await apiFetch(API_URL + '/transactions');
-                transactions = await res.json();
+                transactions = (await res.json()).map(t => ({ ...t, amount: parseFloat(t.amount) }));
                 updateUI();
             } catch (e) { if (e.message !== '401') console.error(e); }
         }
@@ -854,7 +854,7 @@
         async function loadInvestments() {
             try {
                 const res = await apiFetch(API_URL + '/investments');
-                investments = await res.json();
+                investments = (await res.json()).map(i => ({ ...i, capital: parseFloat(i.capital), monthly_return: parseFloat(i.monthly_return) }));
                 renderInvestments();
                 updateYearSummary(); // recalcular patrimonio con el capital cargado
             } catch(e) { if (e.message !== '401') console.error(e); }
