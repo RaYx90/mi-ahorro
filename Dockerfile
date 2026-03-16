@@ -26,6 +26,6 @@ ENV PORT=3000
 
 # Health check: espera un 401 (API protegida = servidor vivo)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- --server-response http://localhost:3000/api/transactions 2>&1 | grep -q "401 Unauthorized" && exit 0 || exit 1
+    CMD wget -qO- http://127.0.0.1:3000/ > /dev/null 2>&1 || exit 1
 
 CMD ["node", "server.js"]
