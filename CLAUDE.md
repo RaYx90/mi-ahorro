@@ -6,11 +6,11 @@ Desplegada en un NAS doméstico con Docker. Acceso desde navegador local/LAN.
 
 ## Stack
 - **Backend:** Node.js 20 + Express (server.js)
-- **Base de datos:** PostgreSQL 17 (contenedor externo compartido, red `postgres-net`)
+- **Base de datos:** PostgreSQL 17 (contenedor externo compartido, red `postgres`)
 - **Frontend:** HTML/CSS/JS puro, sin frameworks (public/index.html)
 - **Auth:** Cookie de sesión con express-session (httpOnly, secure, sameSite=strict, 8h)
 - **Seguridad:** helmet (cabeceras HTTP), escapeHtml manual (anti-XSS)
-- **TLS:** Caddy reverse proxy externo (contenedor caddy-proxy, red `caddy-net`)
+- **TLS:** Caddy reverse proxy externo (contenedor caddy-proxy, red `caddy`)
 - **Contenedor:** Docker + docker-compose
 
 ## Estructura de archivos
@@ -18,7 +18,7 @@ Desplegada en un NAS doméstico con Docker. Acceso desde navegador local/LAN.
 server.js               — servidor Express, API REST, auth, PostgreSQL (pg)
 public/index.html       — frontend completo (CSS + HTML + JS en un solo archivo)
 Dockerfile              — imagen node:20.19.0-alpine, usuario no-root nodejs (uid 1001)
-docker-compose.yml      — servicio mi-ahorro, redes externas postgres-net y caddy-net
+docker-compose.yml      — servicio mi-ahorro, redes externas postgres y caddy
 .env                    — variables de entorno locales (NO versionar)
 .env.example            — plantilla de variables (sí versionar)
 ```
@@ -95,8 +95,8 @@ docker compose build --no-cache && docker compose up -d
 ### Servicios externos (sus propios repos/compose)
 | Service | Repo | Red externa |
 |---|---|---|
-| `postgres` | `postgres` | `postgres-net` |
-| `caddy-proxy` | `caddy-proxy` | `caddy-net` |
+| `postgres` | `postgres` | `postgres` |
+| `caddy-proxy` | `caddy-proxy` | `caddy` |
 
 ## Decisiones de arquitectura tomadas
 
@@ -143,3 +143,6 @@ docker compose build --no-cache && docker compose up -d
 | 2026-03-15 | INFO_ONLY_CATS: investment y hucha no distorsionan medias ni barras del gráfico |
 | 2026-03-15 | Deploy cambiado a flujo Git: push local → git pull en NAS share → docker-compose |
 | 2026-03-15 | Migración SQLite → PostgreSQL: server.js reescrito con pg, Dockerfile simplificado, TLS delegado a Caddy externo |
+| 2026-03-16 | Redes Docker renombradas: postgres-net → postgres, caddy-net → caddy |
+| 2026-03-16 | Healthcheck: 127.0.0.1 en vez de localhost (fix IPv6 en Alpine) |
+| 2026-03-16 | Datos migrados a PostgreSQL compartido: 107 transactions + 1 investment |
