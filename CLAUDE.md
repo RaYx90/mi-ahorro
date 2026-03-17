@@ -8,7 +8,7 @@ Desplegada en un NAS doméstico con Docker. Acceso desde navegador local/LAN.
 - **Backend:** Node.js 20 + Express (server.js)
 - **Base de datos:** PostgreSQL 17 (contenedor externo compartido, red `postgres`)
 - **Frontend:** HTML/CSS/JS puro, sin frameworks (public/index.html)
-- **Auth:** Login usuario/password (bcrypt hash), cookie de sesión express-session (httpOnly, secure, sameSite=lax, 8h)
+- **Auth:** Login usuario/password (bcrypt hash), cookie de sesión express-session (httpOnly, secure, sameSite=lax, rolling 7 días)
 - **Seguridad:** helmet (cabeceras HTTP), escapeHtml (anti-XSS), rate limiting login (5 intentos/15min), trust proxy para Caddy
 - **TLS:** Caddy reverse proxy externo (contenedor caddy-proxy, red `caddy`)
 - **Contenedor:** Docker + docker-compose
@@ -43,7 +43,7 @@ Tabla `users`: id, username (email), password_hash (bcrypt 12 rounds), created_a
 ## API REST (todos los endpoints requieren sesión activa)
 | Método | Ruta | Descripción |
 |---|---|---|
-| POST | /api/login | Login, body: `{password}` |
+| POST | /api/login | Login, body: `{username, password}` |
 | POST | /api/logout | Cierra la sesión |
 | GET | /api/transactions | Lista todas las transacciones |
 | POST | /api/transactions | Crea transacción |
@@ -58,6 +58,7 @@ Sin sesión → 401. ID inexistente en PUT/DELETE → 404.
 
 ## Esquema PostgreSQL
 ```sql
+users (id SERIAL PK, username TEXT UNIQUE, password_hash TEXT, created_at TIMESTAMPTZ)
 transactions (id SERIAL PK, type TEXT CHECK, amount NUMERIC(12,2), description TEXT, category TEXT, date DATE, created_at TIMESTAMPTZ)
 investments (id SERIAL PK, name TEXT, capital NUMERIC(12,2), monthly_return NUMERIC(12,2), start_date DATE, end_date DATE, notes TEXT, created_at TIMESTAMPTZ)
 ```
@@ -160,3 +161,5 @@ docker compose build --no-cache && docker compose up -d
 | 2026-03-16 | Auth refactor: login con usuario/password en BD (bcrypt 12 rounds) + rate limiting (5/15min) |
 | 2026-03-16 | Toggle mostrar/ocultar password en login |
 | 2026-03-16 | Eliminado APP_PASSWORD — usuarios en tabla users |
+| 2026-03-16 | Sesión rolling 7 días (maxAge 7d + rolling:true) — renueva al usar la app |
+| 2026-03-16 | Toggle mostrar/ocultar password en login (ojo SVG) |
