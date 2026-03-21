@@ -1,8 +1,2 @@
 {
-  "enableAllProjectMcpServers": true,
-  "permissions": {
-    "allow": [
-      "mcp__chrome-devtools__*"
-    ]
-  }
 }
